@@ -33,7 +33,7 @@ namespace ElectricityMod
                 additionEdits = (x,y) =>
                 {
                     DestroyImmediate(x.GetComponentInChildren<PipeSocket>(true));
-                    Traverse.Create(y).Field("timer").SetValue(float.NegativeInfinity);
+                    y.timer = float.NegativeInfinity;
                     y.GetComponent<Collider>().enabled = false;
                     var b = x.gameObject.AddComponent<Block_MotorWheel_Electric>();
                     b.CopyFieldsOf(x);
@@ -55,13 +55,13 @@ namespace ElectricityMod
                     f.CopyFieldsOf(t);
                     b.ReplaceValues(t, f);
                     DestroyImmediate(t);
-                    Traverse.Create(e).Field("wheelRotationSpeed").SetValue(Traverse.Create(e).Field("wheelRotationSpeed").GetValue<float>() * 1.5f);
+                    e.wheelRotationSpeed *= 1.5f;
                     e.FuelTank.maxCapacity = 1;
                     e.FuelTank.harvestSetting = Tank.HarvestSetting.NONE;
                     e.FuelTank.defaultFuelToAdd = null;
-                    Traverse.Create(e.FuelTank).Field("tankAcceptance").SetValue(Tank.TankAcceptance.None);
-                    Traverse.Create(e.FuelTank).Field("acceptableTypes").SetValue(new List<Item_Base>());
-                    Traverse.Create(e.FuelTank).Field("acceptableOutputTypes").SetValue(new List<Item_Base>());
+                    e.FuelTank.tankAcceptance = Tank.TankAcceptance.None;
+                    e.FuelTank.acceptableTypes = new List<Item_Base>();
+                    e.FuelTank.acceptableOutputTypes = new List<Item_Base>();
                     return b;
                 },
                 cost = new[] {
@@ -181,9 +181,9 @@ namespace ElectricityMod
             harmony?.UnpatchAll(harmony.Id);
             LocalizationManager.Sources.Remove(language);
             foreach (var q in Resources.FindObjectsOfTypeAll<SO_BlockQuadType>())
-                Traverse.Create(q).Field("acceptableBlockTypes").GetValue<List<Item_Base>>().RemoveAll(x => items.Any(y => y.item?.UniqueIndex == x.UniqueIndex));
+                q.acceptableBlockTypes.RemoveAll(x => items.Any(y => y.item?.UniqueIndex == x.UniqueIndex));
             foreach (var q in Resources.FindObjectsOfTypeAll<SO_BlockCollisionMask>())
-                Traverse.Create(q).Field("blockTypesToIgnore").GetValue<List<Item_Base>>().RemoveAll(x => items.Any(y => y.item?.UniqueIndex == x.UniqueIndex));
+                q.blockTypesToIgnore.RemoveAll(x => items.Any(y => y.item?.UniqueIndex == x.UniqueIndex));
             ItemManager.GetAllItems().RemoveAll(x => items.Any(y => y.item?.UniqueIndex == x.UniqueIndex));
             foreach (var b in BlockCreator.GetPlacedBlocks())
                 if (b.buildableItem != null && items.Any(y => y.item?.UniqueIndex == b.buildableItem.UniqueIndex))
@@ -210,7 +210,7 @@ namespace ElectricityMod
         {
             item.item = item.baseItem.Clone(item.UniqueIndex, item.UniqueName);
             createdObjects.Add(item.item);
-            Traverse.Create(item.item.settings_buildable).Field("mirroredVersion").SetValue(null);
+            item.item.settings_buildable.mirroredVersion = null;
             var t = item.baseItem.settings_Inventory.Sprite.texture.GetReadable(item.baseItem.settings_Inventory.Sprite.rect);
             t.Edit();
             var t2 = new Texture2D(t.width, t.height, t.format, false);
@@ -258,17 +258,17 @@ namespace ElectricityMod
                 if (nb)
                     p[i] = nb;
             }
-            Traverse.Create(item.item.settings_buildable).Field("blockPrefabs").SetValue(p);
+            item.item.settings_buildable.blockPrefabs=p;
 
             foreach (var q in Resources.FindObjectsOfTypeAll<SO_BlockQuadType>())
                 if (q.AcceptsBlock(item.baseItem))
-                    Traverse.Create(q).Field("acceptableBlockTypes").GetValue<List<Item_Base>>().Add(item.item);
+                    q.acceptableBlockTypes.Add(item.item);
             foreach (var q in Resources.FindObjectsOfTypeAll<SO_BlockCollisionMask>())
                 if (q.IgnoresBlock(item.baseItem))
-                    Traverse.Create(q).Field("blockTypesToIgnore").GetValue<List<Item_Base>>().Add(item.item);
+                    q.blockTypesToIgnore.Add(item.item);
             RAPI.RegisterItem(item.item);
             foreach (var i in ItemManager.GetAllItems().FindAll(x => x.settings_recipe.BlueprintItem?.UniqueIndex == item.baseIndex || (x.settings_recipe.ExtraBlueprintItems?.Any(y => y?.UniqueIndex == item.baseIndex) ?? false)))
-                Traverse.Create(i.settings_recipe).Field("extraBlueprintItems").SetValue(i.settings_recipe.ExtraBlueprintItems.AddToArray(item.item));
+                i.settings_recipe.extraBlueprintItems = i.settings_recipe.ExtraBlueprintItems.AddToArray(item.item);
         }
         public static T CreateObject<T>() => (T)FormatterServices.GetUninitializedObject(typeof(T));
     }
@@ -309,20 +309,13 @@ namespace ElectricityMod
     }
     public class MotorWheel_Electric : MotorWheel
     {
-        public bool hasBeenPlaced = false;
         public Battery battery;
-        static FieldInfo _timePerFuel = typeof(MotorWheel).GetField("timePerFuel", ~BindingFlags.Default);
-        public float timePerFuel
-        {
-            get => (float)_timePerFuel.GetValue(this);
-            set => _timePerFuel.SetValue(this,value);
-        }
         new void Awake()
         {
             battery.gameObject.AddComponent<BatteryStateUpdate>().OnUpdate += x=> FuelTank.SetTankAmount(x.NormalizedBatteryLeft);
             base.Awake();
         }
-        public override bool Deserialize(Message_NetworkBehaviour msg, CSteamID remoteID)
+        public override bool Deserialize(Message_NetworkBehaviour msg, Network_UserId remoteID)
         {
             if (msg is Message_Battery)
                 return battery.OnBatteryMessage(msg);
@@ -344,15 +337,13 @@ namespace ElectricityMod
                 }
             }
         }
-        public void OnBlockPlaced()
+        new public void OnBlockPlaced()
         {
             hasBeenPlaced = true;
             battery.GetComponent<Collider>().enabled = true;
             NetworkIDManager.AddNetworkID(this,typeof(MotorWheel));
-            BaseOnBlockPlaced();
+            base.OnBlockPlaced();
         }
-        static MethodInfo _OnBlockPlaced = typeof(MotorWheel).GetMethod("OnBlockPlaced", ~BindingFlags.Default);
-        void BaseOnBlockPlaced() => _OnBlockPlaced.Invoke(this, new object[0]);
         public override RGD Serialize_Save()
         {
             var r = Main.CreateObject<RGD_Block_ElectricPurifier>();
@@ -361,7 +352,7 @@ namespace ElectricityMod
             r.objectIndex = (engineSwitchOn ? 1u : 0) + (rotatesForward ? 2u : 0);
             return r;
         }
-        protected override void OnDestroy()
+        public override void OnDestroy()
         {
             NetworkIDManager.RemoveNetworkID(this, typeof(MotorWheel));
             base.OnDestroy();
@@ -385,7 +376,7 @@ namespace ElectricityMod
     {
         public Battery battery;
 
-        protected override void Update()
+        public override void Update()
         {
             if (!hasBeenPlaced)
             {
@@ -395,19 +386,19 @@ namespace ElectricityMod
             HandleAnimations();
         }
 
-        protected override void OnBlockPlaced()
+        public override void OnBlockPlaced()
         {
             base.OnBlockPlaced();
             battery.GetComponent<Collider>().enabled = true;
             battery.On = false;
         }
 
-        protected override bool IsCooking()
+        public override bool IsCooking()
         {
             return base.IsCooking() && battery.CanGiveElectricity && battery.On;
         }
 
-        protected override bool StartCooking(SO_CookingTable_Recipe recipe)
+        public override bool StartCooking(SO_CookingTable_Recipe recipe)
         {
             bool flag = base.StartCooking(recipe);
             if (flag)
@@ -415,7 +406,7 @@ namespace ElectricityMod
             return flag;
         }
 
-        protected override void FinishCooking()
+        public override void FinishCooking()
         {
             base.FinishCooking();
             battery.On = false;
@@ -467,7 +458,7 @@ namespace ElectricityMod
                 rgd.rgdBattery.RestoreBattery(battery);
         }
 
-        public override bool Deserialize(Message_NetworkBehaviour msg, CSteamID remoteID)
+        public override bool Deserialize(Message_NetworkBehaviour msg, Network_UserId remoteID)
         {
             if (msg is Message_Battery)
                 return battery.OnBatteryMessage(msg);
@@ -499,13 +490,13 @@ namespace ElectricityMod
                 {
                     var b = block.GetComponent<MotorWheel_Electric>().battery;
                     if (!b.BatterySlotIsEmpty)
-                        player.Inventory.AddItem(Traverse.Create(b).Field("batteryInstance").GetValue<ItemInstance>());
+                        player.Inventory.AddItem(b.batteryInstance);
                 }
                 if (block.GetComponent<CookingTable_Pot_Electric>())
                 {
                     var b = block.GetComponent<CookingTable_Pot_Electric>().battery;
                     if (!b.BatterySlotIsEmpty)
-                        player.Inventory.AddItem(Traverse.Create(b).Field("batteryInstance").GetValue<ItemInstance>());
+                        player.Inventory.AddItem(b.batteryInstance);
                 }
             }
         }
@@ -529,7 +520,7 @@ namespace ElectricityMod
     [HarmonyPatch]
     static class Patch_CreateMotorRestore
     {
-        static MethodBase TargetMethod() => typeof(Message_MotorWheelCreate).GetConstructors()[0];
+        static MethodBase TargetMethod() => typeof(Message_MotorWheelCreate).GetConstructors().First(x => x.GetParameters().Any(y => y.ParameterType == typeof(MotorWheel[])));
         static void Prefix(ref MotorWheel[] motors)
         {
             var l = motors.ToList();
@@ -696,7 +687,6 @@ namespace ElectricityMod
             var prev = RenderTexture.active;
             RenderTexture.active = temp;
             var area = copyArea ?? new Rect(0, 0, temp.width, temp.height);
-            area.y = temp.height - area.y - area.height;
             var texture = new Texture2D((int)area.width, (int)area.height, targetFormat ?? TextureFormat.RGBA32, mipChain);
             texture.ReadPixels(area, 0, 0);
             texture.Apply();
