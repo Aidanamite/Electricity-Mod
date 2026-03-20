@@ -347,7 +347,7 @@ namespace ElectricityMod
         public override RGD Serialize_Save()
         {
             var r = Main.CreateObject<RGD_Block_ElectricPurifier>();
-            r.CopyFieldsOf(new RGD_Block(RGDType.Block, GetComponent<Block>()));
+            r.CopyFieldsOf(new RGD_Block(RGDType.Block_Electric_Purifier, GetComponent<Block>()));
             r.rgdBattery = new RGD_Battery(battery);
             r.objectIndex = (engineSwitchOn ? 1u : 0) + (rotatesForward ? 2u : 0);
             return r;
